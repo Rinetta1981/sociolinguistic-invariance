@@ -9,13 +9,16 @@ description = "A replication-first framework for evaluating language-model behav
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
-dependencies = []
+dependencies = [
+    "jsonschema>=4.23,<5",
+]
 
 [project.optional-dependencies]
 dev = [
     "mypy>=1.11",
     "pytest>=8.3",
     "ruff>=0.8",
+    "types-jsonschema",
 ]
 
 [tool.setuptools.packages.find]

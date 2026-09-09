@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sociolinguistic Invariance Semantic Family",
+  "description": "Machine-readable contract for one semantic family in benchmark version 0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "family_id",
+    "task_type",
+    "proposition",
+    "domain",
+    "split",
+    "expected_behavior",
+    "variants",
+    "validation_status"
+  ],
+  "properties": {
+    "family_id": {
+      "type": "string",
+      "pattern": "^(FP|EU|BR)_[0-9]{4}$"
+    },
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "false_premise_correction",
+        "epistemic_uncertainty",
+        "benign_request"
+      ]
+    },
+    "proposition": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "split": {
+      "type": "string",
+      "enum": [
+        "discovery",
+        "replication"
+      ]
+    },
+    "expected_behavior": {
+      "type": "string",
+      "minLength": 1
+    },
+    "variants": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "condition",
+          "text"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "formal",
+              "informal",
+              "greeklish"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "validation_status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "reviewed",
+        "frozen",
+        "excluded"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "validation_status": {
+            "const": "frozen"
+          }
+        },
+        "required": [
+          "validation_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "variants": {
+            "minItems": 4,
+            "maxItems": 4,
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "condition": {
+                      "const": "standard"
+                    }
+                  },
+                  "required": [
+                    "condition"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "condition": {
+                      "const": "formal"
+                    }
+                  },
+                  "required": [
+                    "condition"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "condition": {
+                      "const": "informal"
+                    }
+                  },
+                  "required": [
+                    "condition"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "condition": {
+                      "const": "greeklish"
+                    }
+                  },
+                  "required": [
+                    "condition"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

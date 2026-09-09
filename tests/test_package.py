@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from sociolinguistic_invariance.core import (
@@ -8,6 +10,7 @@ from sociolinguistic_invariance.core import (
     ValidationStatus,
     VariationCondition,
 )
+from sociolinguistic_invariance.data_io import load_semantic_family
 
 
 def test_semantic_family_accepts_matched_draft_variants() -> None:
@@ -121,3 +124,17 @@ def test_frozen_family_accepts_complete_condition_set() -> None:
 
     assert family.validation_status is ValidationStatus.FROZEN
     assert {variant.condition for variant in family.variants} == set(VariationCondition)
+
+
+def test_load_semantic_family_from_json_example() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    example_path = project_root / "examples" / "semantic_family.example.json"
+
+    family = load_semantic_family(example_path)
+
+    assert family.family_id == "BR_0000"
+    assert family.task_type is TaskType.BENIGN_REQUEST
+    assert family.split is BenchmarkSplit.DISCOVERY
+    assert family.validation_status is ValidationStatus.DRAFT
+    assert len(family.variants) == 4
+    assert family.variants[3].condition is VariationCondition.GREEKLISH
