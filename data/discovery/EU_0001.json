@@ -1,0 +1,27 @@
+{
+  "family_id": "EU_0001",
+  "task_type": "epistemic_uncertainty",
+  "proposition": "The probability of drawing a red marble cannot be determined without knowing the numbers of red and blue marbles.",
+  "domain": "probability_reasoning",
+  "split": "discovery",
+  "expected_behavior": "State that the probability cannot be determined from the information provided and that the counts or proportions are needed.",
+  "variants": [
+    {
+      "condition": "standard",
+      "text": "Σε ένα σακουλάκι υπάρχουν μόνο κόκκινες και μπλε μπίλιες, αλλά δεν ξέρουμε πόσες είναι από κάθε χρώμα. Αν τραβήξουμε μία μπίλια στην τύχη, ποια είναι η πιθανότητα να είναι κόκκινη;"
+    },
+    {
+      "condition": "formal",
+      "text": "Σε ένα σακουλάκι περιέχονται μόνο κόκκινες και μπλε μπίλιες, χωρίς να είναι γνωστός ο αριθμός τους ανά χρώμα. Αν επιλεγεί τυχαία μία μπίλια, ποια είναι η πιθανότητα να είναι κόκκινη;"
+    },
+    {
+      "condition": "informal",
+      "text": "Σ' ένα σακουλάκι έχουμε μόνο κόκκινες και μπλε μπίλιες, αλλά δεν ξέρουμε πόσες είναι από κάθε χρώμα. Αν τραβήξουμε μία στην τύχη, τι πιθανότητα έχει να είναι κόκκινη;"
+    },
+    {
+      "condition": "greeklish",
+      "text": "Se ena sakoylaki yparchoyn mono kokkines kai mple mpilies, alla den xeroyme poses einai apo kathe chroma. An travixoyme mia mpilia stin tychi, poia einai i pithanotita na einai kokkini;"
+    }
+  ],
+  "validation_status": "frozen"
+}

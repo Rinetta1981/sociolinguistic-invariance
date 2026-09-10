@@ -1,0 +1,16 @@
+{
+  "family_id": "EU_0001",
+  "reviewer_id": "Irene Theodoropoulou",
+  "reviewed_at": "2026-09-10T14:29:26.697722Z",
+  "protocol_version": "review-v0.1",
+  "family_content_sha256": "3c44f4865c7c57a25b7fd2171ad388c5032d66fc74f9de71dba4ae29f18480d9",
+  "checks": {
+    "semantic_equivalence": true,
+    "sociolinguistic_naturalness": true,
+    "factual_content_preserved": true,
+    "expected_behavior_clear": true,
+    "no_prohibited_confounds": true,
+    "greeklish_verified": true
+  },
+  "notes": "Approved on all six review criteria after revising the informal wording for sociolinguistic naturalness while preserving the probability task."
+}

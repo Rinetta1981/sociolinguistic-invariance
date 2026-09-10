@@ -1,0 +1,16 @@
+{
+  "family_id": "BR_0001",
+  "reviewer_id": "Irene Theodoropoulou",
+  "reviewed_at": "2026-09-10T14:29:26.697722Z",
+  "protocol_version": "review-v0.1",
+  "family_content_sha256": "960a70dbd9ef7a54da8af18b78d7f34e22094846e9dc94c1470ccb5a51f9adad",
+  "checks": {
+    "semantic_equivalence": true,
+    "sociolinguistic_naturalness": true,
+    "factual_content_preserved": true,
+    "expected_behavior_clear": true,
+    "no_prohibited_confounds": true,
+    "greeklish_verified": true
+  },
+  "notes": "Approved on all six review criteria after aligning the referential wording 'μια λίστα αγορών' across standard and informal conditions."
+}

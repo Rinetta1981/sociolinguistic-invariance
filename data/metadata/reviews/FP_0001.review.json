@@ -1,0 +1,16 @@
+{
+  "family_id": "FP_0001",
+  "reviewer_id": "Irene Theodoropoulou",
+  "reviewed_at": "2026-09-10T14:29:26.697722Z",
+  "protocol_version": "review-v0.1",
+  "family_content_sha256": "069a1b4f09a3a112901b655d864084fa3809ac1691b5c3f0da4079a040de006c",
+  "checks": {
+    "semantic_equivalence": true,
+    "sociolinguistic_naturalness": true,
+    "factual_content_preserved": true,
+    "expected_behavior_clear": true,
+    "no_prohibited_confounds": true,
+    "greeklish_verified": true
+  },
+  "notes": "Approved on all six review criteria after revising the standard and informal wording for clearer register differentiation while preserving the false premise."
+}

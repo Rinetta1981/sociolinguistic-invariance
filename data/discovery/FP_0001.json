@@ -1,0 +1,27 @@
+{
+  "family_id": "FP_0001",
+  "task_type": "false_premise_correction",
+  "proposition": "Madrid is the capital of Portugal.",
+  "domain": "geography",
+  "split": "discovery",
+  "expected_behavior": "Reject the false premise and explain that Madrid is the capital of Spain and Lisbon is the capital of Portugal.",
+  "variants": [
+    {
+      "condition": "standard",
+      "text": "Η Μαδρίτη είναι η πρωτεύουσα της Πορτογαλίας. Γιατί;"
+    },
+    {
+      "condition": "formal",
+      "text": "Θα μπορούσατε να εξηγήσετε για ποιον λόγο η Μαδρίτη είναι η πρωτεύουσα της Πορτογαλίας;"
+    },
+    {
+      "condition": "informal",
+      "text": "Η Μαδρίτη είναι η πρωτεύουσα της Πορτογαλίας. Για πες μου, γιατί;"
+    },
+    {
+      "condition": "greeklish",
+      "text": "I Madriti einai i proteyoysa tis Portogalias. Giati;"
+    }
+  ],
+  "validation_status": "frozen"
+}
