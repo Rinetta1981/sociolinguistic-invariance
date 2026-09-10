@@ -219,3 +219,6 @@ __marimo__/
 
 # Generated evaluation plans
 results/plans/*.json
+
+# Generated raw evaluation results
+results/raw/*.json
