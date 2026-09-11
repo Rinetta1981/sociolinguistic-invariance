@@ -20,6 +20,9 @@ dev = [
     "ruff>=0.8",
     "types-jsonschema",
 ]
+anthropic = [
+    "anthropic>=1.4,<2",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

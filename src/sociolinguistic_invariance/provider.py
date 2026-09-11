@@ -21,6 +21,10 @@ class ProviderRateLimitError(ProviderError):
     """The provider rejected the request because of rate limiting."""
 
 
+class ProviderConnectionError(ProviderError):
+    """The provider could not establish or maintain a connection."""
+
+
 class ProviderInvalidResponseError(ProviderError):
     """The provider returned a response that could not be interpreted."""
 
@@ -32,17 +36,36 @@ class ProviderResponse:
     text: str
     provider_request_id: str | None = None
     usage: ProviderUsage | None = None
+    returned_model: str | None = None
+    finish_reason: str | None = None
 
     def __post_init__(self) -> None:
         """Validate provider response metadata."""
 
-        if (
-            self.provider_request_id is not None
-            and not self.provider_request_id.strip()
-        ):
-            raise ValueError(
-                "provider_request_id must be non-blank when provided."
-            )
+        optional_strings = (
+            (
+                "provider_request_id",
+                self.provider_request_id,
+            ),
+            (
+                "returned_model",
+                self.returned_model,
+            ),
+            (
+                "finish_reason",
+                self.finish_reason,
+            ),
+        )
+
+        for field_name, value in optional_strings:
+            if (
+                value is not None
+                and not value.strip()
+            ):
+                raise ValueError(
+                    f"{field_name} must be non-blank "
+                    "when provided."
+                )
 
 
 @dataclass(frozen=True, slots=True)

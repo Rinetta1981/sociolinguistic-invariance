@@ -222,3 +222,6 @@ results/plans/*.json
 
 # Generated raw evaluation results
 results/raw/*.json
+
+# Generated live smoke-test results
+results/smoke/*.json

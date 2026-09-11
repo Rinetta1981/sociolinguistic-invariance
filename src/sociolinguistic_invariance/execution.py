@@ -249,7 +249,9 @@ class EvaluationExecutor:
 
         final_status = ResponseStatus.PROVIDER_ERROR
         final_response_text: str | None = None
+        final_returned_model: str | None = None
         final_provider_request_id: str | None = None
+        final_finish_reason: str | None = None
         final_usage: ProviderUsage | None = None
         final_error_type: str | None = None
         final_error_message: str | None = None
@@ -312,7 +314,9 @@ class EvaluationExecutor:
 
                 final_status = status
                 final_response_text = None
+                final_returned_model = None
                 final_provider_request_id = None
+                final_finish_reason = None
                 final_usage = None
                 final_error_type = error_type
                 final_error_message = error_message
@@ -386,8 +390,14 @@ class EvaluationExecutor:
                     ResponseStatus.INVALID_RESPONSE
                 )
                 final_response_text = None
+                final_returned_model = (
+                    response.returned_model
+                )
                 final_provider_request_id = (
                     response.provider_request_id
+                )
+                final_finish_reason = (
+                    response.finish_reason
                 )
                 final_usage = response.usage
                 final_error_type = error_type
@@ -412,8 +422,14 @@ class EvaluationExecutor:
 
             final_status = ResponseStatus.SUCCESS
             final_response_text = response.text
+            final_returned_model = (
+                response.returned_model
+            )
             final_provider_request_id = (
                 response.provider_request_id
+            )
+            final_finish_reason = (
+                response.finish_reason
             )
             final_usage = response.usage
             final_error_type = None
@@ -464,9 +480,11 @@ class EvaluationExecutor:
                 attempts
             ),
             response_text=final_response_text,
+            returned_model=final_returned_model,
             provider_request_id=(
                 final_provider_request_id
             ),
+            finish_reason=final_finish_reason,
             usage=final_usage,
             error_type=final_error_type,
             error_message=final_error_message,
