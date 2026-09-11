@@ -225,3 +225,6 @@ results/raw/*.json
 
 # Generated live smoke-test results
 results/smoke/*.json
+
+# Generated response annotations
+results/annotations/*.json
