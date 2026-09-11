@@ -59,3 +59,23 @@ Live execution requires the explicit command-line flag:
 
 ```text
 --execute-live
+
+## Normative initial smoke-test safeguards
+
+The initial live-provider smoke test is deliberately narrower than a
+scientific benchmark execution.
+
+The provider-neutral retry policy is fixed to:
+
+```text
+max_attempts = 1
+
+## Normative initial smoke-test safeguards
+
+The initial live-provider smoke test is deliberately narrower than a
+scientific benchmark execution.
+
+The provider-neutral retry policy is fixed to:
+
+```text
+max_attempts = 1
