@@ -4,6 +4,10 @@ from sociolinguistic_invariance.core import (
     TaskType,
 )
 from sociolinguistic_invariance.rubric import (
+    BENIGN_REQUEST_RUBRIC,
+    BENIGN_REQUEST_RUBRIC_VERSION,
+    EPISTEMIC_UNCERTAINTY_RUBRIC,
+    EPISTEMIC_UNCERTAINTY_RUBRIC_VERSION,
     FALSE_PREMISE_CORRECTION_RUBRIC,
     FALSE_PREMISE_CORRECTION_RUBRIC_VERSION,
     CriterionDefinition,
@@ -39,6 +43,20 @@ def test_false_premise_rubric_version() -> None:
     assert (
         FALSE_PREMISE_CORRECTION_RUBRIC_VERSION
         == "false-premise-correction-rubric-v0.1"
+    )
+
+
+def test_epistemic_uncertainty_rubric_version() -> None:
+    assert (
+        EPISTEMIC_UNCERTAINTY_RUBRIC_VERSION
+        == "epistemic-uncertainty-rubric-v0.1"
+    )
+
+
+def test_benign_request_rubric_version() -> None:
+    assert (
+        BENIGN_REQUEST_RUBRIC_VERSION
+        == "benign-request-rubric-v0.1"
     )
 
 
@@ -187,24 +205,24 @@ def test_registry_returns_false_premise_rubric() -> None:
     )
 
 
-def test_registry_rejects_epistemic_uncertainty() -> None:
-    with pytest.raises(
-        KeyError,
-        match="No task rubric is registered",
-    ):
-        get_task_rubric(
-            TaskType.EPISTEMIC_UNCERTAINTY
-        )
+def test_registry_returns_epistemic_uncertainty_rubric() -> None:
+    rubric = get_task_rubric(
+        TaskType.EPISTEMIC_UNCERTAINTY
+    )
+
+    assert rubric is (
+        EPISTEMIC_UNCERTAINTY_RUBRIC
+    )
 
 
-def test_registry_rejects_benign_request() -> None:
-    with pytest.raises(
-        KeyError,
-        match="No task rubric is registered",
-    ):
-        get_task_rubric(
-            TaskType.BENIGN_REQUEST
-        )
+def test_registry_returns_benign_request_rubric() -> None:
+    rubric = get_task_rubric(
+        TaskType.BENIGN_REQUEST
+    )
+
+    assert rubric is (
+        BENIGN_REQUEST_RUBRIC
+    )
 
 
 def test_false_premise_criterion_ids_match_scoring_contract() -> None:
@@ -219,19 +237,46 @@ def test_false_premise_criterion_ids_match_scoring_contract() -> None:
     )
 
 
-def test_false_premise_criteria_have_complete_definitions() -> None:
-    for criterion in (
-        FALSE_PREMISE_CORRECTION_RUBRIC
-        .criteria
-    ):
-        assert criterion.question.strip()
-        assert criterion.yes_definition.strip()
-        assert criterion.no_definition.strip()
-        assert (
-            criterion
-            .unclear_definition
-            .strip()
-        )
+def test_epistemic_criterion_ids_match_scoring_contract() -> None:
+    assert (
+        EPISTEMIC_UNCERTAINTY_RUBRIC
+        .criterion_ids
+    ) == (
+        "EU1",
+        "EU2",
+        "EU3",
+    )
+
+
+def test_benign_criterion_ids_match_scoring_contract() -> None:
+    assert (
+        BENIGN_REQUEST_RUBRIC
+        .criterion_ids
+    ) == (
+        "BR1",
+        "BR2",
+        "BR3",
+        "BR4",
+    )
+
+
+def test_all_rubrics_have_complete_definitions() -> None:
+    rubrics = (
+        FALSE_PREMISE_CORRECTION_RUBRIC,
+        EPISTEMIC_UNCERTAINTY_RUBRIC,
+        BENIGN_REQUEST_RUBRIC,
+    )
+
+    for rubric in rubrics:
+        for criterion in rubric.criteria:
+            assert criterion.question.strip()
+            assert criterion.yes_definition.strip()
+            assert criterion.no_definition.strip()
+            assert (
+                criterion
+                .unclear_definition
+                .strip()
+            )
 
 
 def test_criterion_serialization() -> None:
@@ -257,7 +302,7 @@ def test_criterion_serialization() -> None:
     }
 
 
-def test_task_rubric_serialization() -> None:
+def test_false_premise_rubric_serialization() -> None:
     serialized = task_rubric_to_dict(
         FALSE_PREMISE_CORRECTION_RUBRIC
     )
@@ -294,3 +339,43 @@ def test_task_rubric_serialization() -> None:
         "FP3",
         "FP4",
     ]
+
+
+def test_epistemic_rubric_serialization() -> None:
+    serialized = task_rubric_to_dict(
+        EPISTEMIC_UNCERTAINTY_RUBRIC
+    )
+
+    assert serialized[
+        "task_type"
+    ] == "epistemic_uncertainty"
+
+    assert serialized[
+        "rubric_version"
+    ] == (
+        "epistemic-uncertainty-rubric-v0.1"
+    )
+
+    assert serialized[
+        "criterion_count"
+    ] == 3
+
+
+def test_benign_rubric_serialization() -> None:
+    serialized = task_rubric_to_dict(
+        BENIGN_REQUEST_RUBRIC
+    )
+
+    assert serialized[
+        "task_type"
+    ] == "benign_request"
+
+    assert serialized[
+        "rubric_version"
+    ] == (
+        "benign-request-rubric-v0.1"
+    )
+
+    assert serialized[
+        "criterion_count"
+    ] == 4
