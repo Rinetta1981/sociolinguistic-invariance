@@ -6,12 +6,20 @@ from typing import Any
 import streamlit as st
 
 from sociolinguistic_invariance.dashboard_data import load_dashboard_dataset
+from sociolinguistic_invariance.dashboard_snapshot import load_dashboard_snapshot
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 ANNOTATION_DIR = PROJECT_ROOT / "results" / "annotations"
+SNAPSHOT_PATH = (
+    PROJECT_ROOT
+    / "data"
+    / "dashboard"
+    / "discovery_v0.1.json"
+)
 
 CANONICAL_RUN_ID = "run_5d3a9ef724bd471ca96c9efe76bfc7db"
 ANNOTATOR_ID = "annotator-001"
+EXPECTED_ANNOTATION_COUNT = 12
 
 CONDITION_LABELS = {
     "standard": "Standard Modern Greek",
@@ -99,34 +107,49 @@ def enum_value(value: Any) -> str:
     return str(value)
 
 
-def annotation_paths() -> list[Path]:
-    """Return the 12 annotations from the canonical discovery run."""
-    paths = sorted(
+def canonical_annotation_paths() -> list[Path]:
+    """Return local annotations for the canonical discovery run."""
+    return sorted(
         ANNOTATION_DIR.glob(
             f"{CANONICAL_RUN_ID}_*_{ANNOTATOR_ID}.json"
         )
     )
 
-    if len(paths) != 12:
-        raise RuntimeError(
-            "Expected exactly 12 annotation files for the canonical "
-            f"discovery run, but found {len(paths)}."
+
+def load_data() -> tuple[Any, str]:
+    """Load local validated data or the portable public snapshot."""
+    paths = canonical_annotation_paths()
+
+    if len(paths) == EXPECTED_ANNOTATION_COUNT:
+        return (
+            load_dashboard_dataset(
+                paths,
+                project_root=PROJECT_ROOT,
+            ),
+            "validated local annotation artifacts",
         )
 
-    return paths
+    if paths:
+        raise RuntimeError(
+            "Found an incomplete set of canonical local "
+            "annotation files. Expected "
+            f"{EXPECTED_ANNOTATION_COUNT}, but found "
+            f"{len(paths)}. Refusing to mix incomplete local "
+            "artifacts with the public snapshot."
+        )
 
-
-def load_data() -> Any:
-    """Load and validate the canonical dashboard dataset."""
-    return load_dashboard_dataset(
-        annotation_paths(),
-        project_root=PROJECT_ROOT,
+    return (
+        load_dashboard_snapshot(
+            SNAPSHOT_PATH
+        ),
+        "committed portable discovery snapshot",
     )
 
 
 def family_label(family: Any) -> str:
     """Return a visitor-friendly label for a semantic family."""
     task = enum_value(family.task_type)
+
     task_label = TASK_LABELS.get(
         task,
         task.replace("_", " ").title(),
@@ -143,7 +166,10 @@ def count_responses(dataset: Any) -> int:
     )
 
 
-def count_family_outcomes(dataset: Any, target: str) -> int:
+def count_family_outcomes(
+    dataset: Any,
+    target: str,
+) -> int:
     """Count families with a requested family-level outcome."""
     return sum(
         1
@@ -152,8 +178,11 @@ def count_family_outcomes(dataset: Any, target: str) -> int:
     )
 
 
-def count_contrasts(dataset: Any, target: str) -> int:
-    """Count Standard-referenced contrasts with a requested outcome."""
+def count_contrasts(
+    dataset: Any,
+    target: str,
+) -> int:
+    """Count Standard-referenced contrasts with an outcome."""
     count = 0
 
     for family in dataset.families:
@@ -167,8 +196,10 @@ def count_contrasts(dataset: Any, target: str) -> int:
     return count
 
 
-def sorted_responses(family: Any) -> list[Any]:
-    """Return responses in the intended sociolinguistic condition order."""
+def sorted_responses(
+    family: Any,
+) -> list[Any]:
+    """Return responses in the intended condition order."""
     return sorted(
         family.responses,
         key=lambda response: CONDITION_ORDER.get(
@@ -178,7 +209,9 @@ def sorted_responses(family: Any) -> list[Any]:
     )
 
 
-def outcome_icon(outcome: Any) -> str:
+def outcome_icon(
+    outcome: Any,
+) -> str:
     """Return a compact visual marker for an outcome."""
     raw = enum_value(outcome)
 
@@ -205,7 +238,9 @@ def outcome_icon(outcome: Any) -> str:
     return "❔"
 
 
-def render_response_panel(response: Any) -> None:
+def render_response_panel(
+    response: Any,
+) -> None:
     """Render one linguistic-condition response."""
     condition = enum_value(response.condition)
     response_outcome = enum_value(response.response_outcome)
@@ -255,9 +290,11 @@ def render_response_panel(response: Any) -> None:
         st.markdown(
             f"**Request ID:** `{response.request_id}`"
         )
+
         st.markdown(
             f"**Provider:** `{response.provider}`"
         )
+
         st.markdown(
             f"**Requested model:** `{response.requested_model}`"
         )
@@ -306,7 +343,9 @@ def render_response_panel(response: Any) -> None:
         )
 
 
-def render_overview(dataset: Any) -> None:
+def render_overview(
+    dataset: Any,
+) -> None:
     """Render discovery-pilot summary metrics."""
     st.header("Pilot overview")
 
@@ -346,7 +385,9 @@ def render_overview(dataset: Any) -> None:
     )
 
 
-def render_family_explorer(dataset: Any) -> None:
+def render_family_explorer(
+    dataset: Any,
+) -> None:
     """Render the interactive semantic-family explorer."""
     st.header("Explore a semantic family")
 
@@ -479,13 +520,18 @@ This interface displays **already-generated and already-scored
 research artifacts**. The dashboard does not silently rescore model
 outputs.
 
-Before display, the dashboard data layer validates the relationships
-among the run, request, semantic family, linguistic condition, prompt,
-model response, and human annotation.
+When local research artifacts are available, the dashboard validates
+their relationships among the run, request, semantic family,
+linguistic condition, prompt, model response, and human annotation.
 
-This is a **discovery pilot**. The next scientific step is replication
-using fresh held-out semantic families and independent, ideally
-blinded, annotation.
+For portable deployment, the interface can instead load a committed
+snapshot generated from that validated dataset. The snapshot loader
+checks its format, counts, family uniqueness, condition uniqueness,
+and exact response hashes before display.
+
+This remains a **discovery pilot**. The next scientific step is
+replication using fresh held-out semantic families and independent,
+ideally blinded, annotation.
 """
     )
 
@@ -509,25 +555,27 @@ def main() -> None:
 
     st.write(
         "This interactive prototype explores whether a "
-        "language model's core behavior remains reliable when "
-        "the semantic task is held constant but socially "
-        "meaningful Greek linguistic form changes."
+        "language model's core behavior remains reliable "
+        "when the semantic task is held constant but "
+        "socially meaningful Greek linguistic form changes."
     )
 
     st.warning(
-        "Discovery pilot only. These results come from three "
-        "semantic families and are not eligible for benchmark-level, "
-        "population-level, or causal claims. "
+        "Discovery pilot only. These results come from "
+        "three semantic families and are not eligible for "
+        "benchmark-level, population-level, or causal claims. "
         "Held-out replication is required."
     )
 
     try:
-        dataset = load_data()
+        dataset, data_source = load_data()
 
     except Exception as exc:
         st.error(
-            "The dashboard dataset could not be loaded or validated."
+            "The dashboard dataset could not be "
+            "loaded or validated."
         )
+
         st.exception(exc)
         st.stop()
 
@@ -536,13 +584,20 @@ def main() -> None:
         f"Annotator: {dataset.annotator_id}"
     )
 
+    st.caption(
+        f"Data source: {data_source}"
+    )
+
     if dataset.benchmark_claim_eligible:
         st.success(
-            "This dataset is marked as eligible for benchmark claims."
+            "This dataset is marked as eligible "
+            "for benchmark claims."
         )
+
     else:
         st.caption(
-            "Benchmark claim eligible: No — discovery-stage evidence."
+            "Benchmark claim eligible: "
+            "No — discovery-stage evidence."
         )
 
     st.divider()
