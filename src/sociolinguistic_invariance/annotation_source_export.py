@@ -42,10 +42,7 @@ def _require_mapping(
 ) -> dict[str, object]:
     """Require a JSON object."""
 
-    if not isinstance(
-        value,
-        dict,
-    ):
+    if not isinstance(value, dict):
         raise ValueError(
             f"{field_name} must be a JSON object."
         )
@@ -63,10 +60,7 @@ def _require_list(
 ) -> list[object]:
     """Require a JSON array."""
 
-    if not isinstance(
-        value,
-        list,
-    ):
+    if not isinstance(value, list):
         raise ValueError(
             f"{field_name} must be a JSON array."
         )
@@ -85,15 +79,10 @@ def _require_string(
 ) -> str:
     """Return one required non-blank string."""
 
-    value = mapping.get(
-        key
-    )
+    value = mapping.get(key)
 
     if (
-        not isinstance(
-            value,
-            str,
-        )
+        not isinstance(value, str)
         or not value.strip()
     ):
         raise ValueError(
@@ -112,14 +101,9 @@ def _require_bool(
 ) -> bool:
     """Return one required Boolean."""
 
-    value = mapping.get(
-        key
-    )
+    value = mapping.get(key)
 
-    if not isinstance(
-        value,
-        bool,
-    ):
+    if not isinstance(value, bool):
         raise ValueError(
             f"{context}.{key} must be a bool."
         )
@@ -135,22 +119,29 @@ def _require_int(
 ) -> int:
     """Return one required integer."""
 
-    value = mapping.get(
-        key
-    )
+    value = mapping.get(key)
 
     if (
-        not isinstance(
-            value,
-            int,
-        )
-        or isinstance(
-            value,
-            bool,
-        )
+        not isinstance(value, int)
+        or isinstance(value, bool)
     ):
         raise ValueError(
             f"{context}.{key} must be an int."
+        )
+
+    return value
+
+
+def _require_external_string(
+    value: str,
+    *,
+    field_name: str,
+) -> str:
+    """Require one supplied non-blank string."""
+
+    if not value.strip():
+        raise ValueError(
+            f"{field_name} must be non-blank."
         )
 
     return value
@@ -164,10 +155,7 @@ def _safe_component(
     """Validate one filename-safe identifier."""
 
     if (
-        value in {
-            ".",
-            "..",
-        }
+        value in {".", ".."}
         or _SAFE_COMPONENT_PATTERN.fullmatch(
             value
         )
@@ -188,9 +176,7 @@ def sha256_file(
 
     digest = hashlib.sha256()
 
-    with path.open(
-        "rb"
-    ) as handle:
+    with path.open("rb") as handle:
         while True:
             chunk = handle.read(
                 1024 * 1024
@@ -199,9 +185,7 @@ def sha256_file(
             if not chunk:
                 break
 
-            digest.update(
-                chunk
-            )
+            digest.update(chunk)
 
     return digest.hexdigest()
 
@@ -219,15 +203,11 @@ def repository_relative_label(
     try:
         return (
             resolved_path
-            .relative_to(
-                resolved_root
-            )
+            .relative_to(resolved_root)
             .as_posix()
         )
     except ValueError:
-        return str(
-            resolved_path
-        )
+        return str(resolved_path)
 
 
 def load_raw_results_artifact(
@@ -257,8 +237,9 @@ def _validate_request_result_binding(
     *,
     request: dict[str, object],
     result: dict[str, object],
+    batch_run_id: str,
 ) -> None:
-    """Require result metadata to match its evaluation request."""
+    """Require one result to match its planned request."""
 
     request_id = _require_string(
         request,
@@ -279,8 +260,38 @@ def _validate_request_result_binding(
             f"{result_request_id!r}."
         )
 
-    for key in (
+    result_run_id = _require_string(
+        result,
         "run_id",
+        context="result",
+    )
+
+    if result_run_id != batch_run_id:
+        raise ValueError(
+            "Batch/result run_id mismatch: "
+            f"{batch_run_id!r} != "
+            f"{result_run_id!r}."
+        )
+
+    request_run_id_value = request.get(
+        "run_id"
+    )
+
+    if request_run_id_value is not None:
+        request_run_id = _require_string(
+            request,
+            "run_id",
+            context="request",
+        )
+
+        if request_run_id != batch_run_id:
+            raise ValueError(
+                "Batch/request run_id mismatch: "
+                f"{batch_run_id!r} != "
+                f"{request_run_id!r}."
+            )
+
+    for key in (
         "family_id",
         "task_type",
         "condition",
@@ -336,9 +347,7 @@ def _index_results(
         dict[str, object],
     ] = {}
 
-    for index, item in enumerate(
-        results
-    ):
+    for index, item in enumerate(results):
         result = _require_mapping(
             item,
             field_name=(
@@ -360,9 +369,7 @@ def _index_results(
                 f"{request_id!r}."
             )
 
-        indexed[
-            request_id
-        ] = result
+        indexed[request_id] = result
 
     return indexed
 
@@ -408,6 +415,20 @@ def prepare_annotation_sources(
 ]:
     """Split one complete raw-results artifact into annotation sources."""
 
+    source_artifact = _require_external_string(
+        source_artifact,
+        field_name="source_artifact",
+    )
+
+    source_artifact_sha256 = (
+        _require_external_string(
+            source_artifact_sha256,
+            field_name=(
+                "source_artifact_sha256"
+            ),
+        )
+    )
+
     artifact_type = _require_string(
         batch,
         "artifact_type",
@@ -432,12 +453,10 @@ def prepare_annotation_sources(
         context="artifact",
     )
 
-    benchmark_claim_eligible = (
-        _require_bool(
-            batch,
-            "benchmark_claim_eligible",
-            context="artifact",
-        )
+    benchmark_claim_eligible = _require_bool(
+        batch,
+        "benchmark_claim_eligible",
+        context="artifact",
     )
 
     result_count = _require_int(
@@ -447,41 +466,54 @@ def prepare_annotation_sources(
     )
 
     plan = _require_mapping(
-        batch.get(
-            "plan"
-        ),
+        batch.get("plan"),
         field_name="artifact.plan",
     )
 
+    plan_run_id = _require_string(
+        plan,
+        "run_id",
+        context="artifact.plan",
+    )
+
+    if plan_run_id != run_id:
+        raise ValueError(
+            "Batch/plan run_id mismatch: "
+            f"{run_id!r} != "
+            f"{plan_run_id!r}."
+        )
+
     requests = _require_list(
-        plan.get(
-            "requests"
-        ),
+        plan.get("requests"),
         field_name=(
             "artifact.plan.requests"
         ),
     )
 
+    plan_request_count = _require_int(
+        plan,
+        "request_count",
+        context="artifact.plan",
+    )
+
+    if plan_request_count != len(requests):
+        raise ValueError(
+            "artifact.plan.request_count does not "
+            "match len(artifact.plan.requests)."
+        )
+
     results = _require_list(
-        batch.get(
-            "results"
-        ),
+        batch.get("results"),
         field_name="artifact.results",
     )
 
-    if result_count != len(
-        results
-    ):
+    if result_count != len(results):
         raise ValueError(
             "artifact.result_count does not "
             "match len(artifact.results)."
         )
 
-    if len(
-        requests
-    ) != len(
-        results
-    ):
+    if len(requests) != len(results):
         raise ValueError(
             "The number of planned requests does "
             "not match the number of results."
@@ -491,25 +523,15 @@ def prepare_annotation_sources(
         results
     )
 
-    prepared: list[
-        PreparedAnnotationSource
-    ] = []
-
-    seen_request_ids: set[str] = set()
-
     git_provenance = _require_mapping(
-        batch.get(
-            "git_provenance"
-        ),
+        batch.get("git_provenance"),
         field_name=(
             "artifact.git_provenance"
         ),
     )
 
     model_configuration = _require_mapping(
-        batch.get(
-            "model_configuration"
-        ),
+        batch.get("model_configuration"),
         field_name=(
             "artifact.model_configuration"
         ),
@@ -521,9 +543,13 @@ def prepare_annotation_sources(
         context="artifact",
     )
 
-    for index, item in enumerate(
-        requests
-    ):
+    prepared: list[
+        PreparedAnnotationSource
+    ] = []
+
+    seen_request_ids: set[str] = set()
+
+    for index, item in enumerate(requests):
         request = _require_mapping(
             item,
             field_name=(
@@ -564,20 +590,8 @@ def prepare_annotation_sources(
         _validate_request_result_binding(
             request=request,
             result=result,
+            batch_run_id=run_id,
         )
-
-        request_run_id = _require_string(
-            request,
-            "run_id",
-            context="request",
-        )
-
-        if request_run_id != run_id:
-            raise ValueError(
-                "Batch/request run_id mismatch: "
-                f"{run_id!r} != "
-                f"{request_run_id!r}."
-            )
 
         family_id = _require_string(
             request,
@@ -591,12 +605,18 @@ def prepare_annotation_sources(
             context="request",
         )
 
-        filename = (
-            annotation_source_filename(
-                run_id=run_id,
-                family_id=family_id,
-                condition=condition,
-            )
+        normalized_request = dict(
+            request
+        )
+
+        normalized_request[
+            "run_id"
+        ] = run_id
+
+        filename = annotation_source_filename(
+            run_id=run_id,
+            family_id=family_id,
+            condition=condition,
         )
 
         payload: dict[
@@ -612,12 +632,8 @@ def prepare_annotation_sources(
             "benchmark_claim_eligible": (
                 benchmark_claim_eligible
             ),
-            "request": dict(
-                request
-            ),
-            "result": dict(
-                result
-            ),
+            "request": normalized_request,
+            "result": dict(result),
             "source": {
                 "artifact": source_artifact,
                 "artifact_sha256": (
@@ -654,13 +670,9 @@ def prepare_annotation_sources(
             )
         )
 
-    if set(
-        result_by_request
-    ) != seen_request_ids:
+    if set(result_by_request) != seen_request_ids:
         unexpected = sorted(
-            set(
-                result_by_request
-            )
+            set(result_by_request)
             - seen_request_ids
         )
 
@@ -670,9 +682,7 @@ def prepare_annotation_sources(
             f"{unexpected!r}."
         )
 
-    return tuple(
-        prepared
-    )
+    return tuple(prepared)
 
 
 def _write_json_atomic(
@@ -720,14 +730,17 @@ def _write_json_atomic(
                 sort_keys=True,
             )
 
-            handle.write(
-                "\n"
-            )
-
+            handle.write("\n")
             handle.flush()
 
             os.fsync(
                 handle.fileno()
+            )
+
+        if temporary_path is None:
+            raise RuntimeError(
+                "Temporary annotation-source "
+                "path was not created."
             )
 
         if (
@@ -779,13 +792,7 @@ def write_annotation_sources_atomic(
         for source in sources
     )
 
-    if len(
-        set(
-            paths
-        )
-    ) != len(
-        paths
-    ):
+    if len(set(paths)) != len(paths):
         raise ValueError(
             "Prepared annotation sources contain "
             "duplicate output paths."
@@ -803,9 +810,7 @@ def write_annotation_sources_atomic(
                 "Refusing to overwrite existing "
                 "annotation-source files: "
                 + ", ".join(
-                    str(
-                        path
-                    )
+                    str(path)
                     for path in existing
                 )
             )
@@ -825,10 +830,6 @@ def write_annotation_sources_atomic(
             overwrite=overwrite,
         )
 
-        written.append(
-            path
-        )
+        written.append(path)
 
-    return tuple(
-        written
-    )
+    return tuple(written)

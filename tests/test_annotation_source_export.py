@@ -17,16 +17,14 @@ from sociolinguistic_invariance.annotation_source_export import (
 def _request(
     *,
     request_id: str = "req-001",
-    run_id: str = "run-001",
     family_id: str = "FP_0001",
     task_type: str = "false_premise_correction",
     condition: str = "standard",
     prompt_sha256: str = "a" * 64,
 ) -> dict[str, object]:
-    """Return one serialized evaluation request."""
+    """Return one request using the real plan-request schema."""
 
     return {
-        "run_id": run_id,
         "request_id": request_id,
         "family_id": family_id,
         "task_type": task_type,
@@ -64,18 +62,19 @@ def _result(
         "condition": condition,
         "provider": "ollama",
         "requested_model": "gemma3:4b",
+        "returned_model": "gemma3:4b",
         "prompt_sha256": prompt_sha256,
         "status": status,
+        "response_text": response_text,
         "request_started_at": (
-            "2026-09-12T00:00:00+00:00"
+            "2026-09-12T00:00:00Z"
         ),
         "response_finished_at": (
-            "2026-09-12T00:00:01+00:00"
+            "2026-09-12T00:00:01Z"
         ),
         "latency_seconds": 1.0,
+        "retry_count": 0,
         "attempts": [],
-        "response_text": response_text,
-        "returned_model": "gemma3:4b",
         "provider_request_id": None,
         "finish_reason": "stop",
         "usage": {
@@ -93,12 +92,21 @@ def _result(
 
 def _batch(
     *,
-    requests: list[dict[str, object]] | None = None,
-    results: list[dict[str, object]] | None = None,
+    requests: list[
+        dict[str, object]
+    ]
+    | None = None,
+    results: list[
+        dict[str, object]
+    ]
+    | None = None,
+    batch_run_id: str = "run-001",
+    plan_run_id: str = "run-001",
     benchmark_claim_eligible: bool = False,
     result_count: int | None = None,
+    plan_request_count: int | None = None,
 ) -> dict[str, object]:
-    """Return one minimal raw-results batch artifact."""
+    """Return one realistic raw-results artifact."""
 
     request_records = (
         requests
@@ -112,16 +120,22 @@ def _batch(
         results
         if results is not None
         else [
-            _result()
+            _result(
+                run_id=batch_run_id
+            )
         ]
     )
 
     observed_result_count = (
-        len(
-            result_records
-        )
+        len(result_records)
         if result_count is None
         else result_count
+    )
+
+    observed_request_count = (
+        len(request_records)
+        if plan_request_count is None
+        else plan_request_count
     )
 
     return {
@@ -131,7 +145,7 @@ def _batch(
         "raw_results_format_version": (
             "raw-results-v0.1"
         ),
-        "run_id": "run-001",
+        "run_id": batch_run_id,
         "artifact_id": "pilot_v0.1",
         "artifact_sha256": "b" * 64,
         "git_provenance": {
@@ -155,7 +169,7 @@ def _batch(
             "sdk_version": None,
         },
         "plan": {
-            "run_id": "run-001",
+            "run_id": plan_run_id,
             "artifact_id": "pilot_v0.1",
             "artifact_path": (
                 "data/frozen/pilot_v0.1.jsonl"
@@ -163,8 +177,8 @@ def _batch(
             "artifact_sha256": "b" * 64,
             "randomized": True,
             "order_seed": 20260910,
-            "request_count": len(
-                request_records
+            "request_count": (
+                observed_request_count
             ),
             "requests": request_records,
         },
@@ -244,7 +258,7 @@ def test_annotation_source_filename_rejects_unsafe_components(
 
 
 def test_prepare_annotation_sources_builds_expected_payload() -> None:
-    """One valid batch response should become one annotation source."""
+    """A valid real-schema response should become one source."""
 
     prepared = prepare_annotation_sources(
         batch=_batch(),
@@ -256,18 +270,15 @@ def test_prepare_annotation_sources_builds_expected_payload() -> None:
         ),
     )
 
-    assert len(
-        prepared
-    ) == 1
+    assert len(prepared) == 1
 
-    source = prepared[
-        0
-    ]
+    source = prepared[0]
 
     assert source.run_id == "run-001"
     assert source.request_id == "req-001"
     assert source.family_id == "FP_0001"
     assert source.condition == "standard"
+
     assert source.filename == (
         "run-001_FP_0001_standard.json"
     )
@@ -297,6 +308,10 @@ def test_prepare_annotation_sources_builds_expected_payload() -> None:
         "request_id"
     ] == "req-001"
 
+    assert request[
+        "run_id"
+    ] == "run-001"
+
     result = source.payload[
         "result"
     ]
@@ -310,6 +325,10 @@ def test_prepare_annotation_sources_builds_expected_payload() -> None:
         "status"
     ] == "SUCCESS"
 
+    assert result[
+        "run_id"
+    ] == "run-001"
+
     source_metadata = source.payload[
         "source"
     ]
@@ -321,7 +340,9 @@ def test_prepare_annotation_sources_builds_expected_payload() -> None:
 
     assert source_metadata[
         "artifact"
-    ] == "results/raw/run-001.json"
+    ] == (
+        "results/raw/run-001.json"
+    )
 
     assert source_metadata[
         "artifact_sha256"
@@ -332,6 +353,97 @@ def test_prepare_annotation_sources_builds_expected_payload() -> None:
     ] == "discovery"
 
 
+def test_prepare_annotation_sources_injects_batch_run_id() -> None:
+    """Plan requests without run_id must receive verified batch run_id."""
+
+    batch = _batch()
+
+    requests = batch[
+        "plan"
+    ]
+
+    assert isinstance(
+        requests,
+        dict,
+    )
+
+    plan_requests = requests[
+        "requests"
+    ]
+
+    assert isinstance(
+        plan_requests,
+        list,
+    )
+
+    first_request = plan_requests[
+        0
+    ]
+
+    assert isinstance(
+        first_request,
+        dict,
+    )
+
+    assert "run_id" not in first_request
+
+    prepared = prepare_annotation_sources(
+        batch=batch,
+        source_artifact="raw.json",
+        source_artifact_sha256="d" * 64,
+    )
+
+    exported_request = prepared[
+        0
+    ].payload[
+        "request"
+    ]
+
+    assert isinstance(
+        exported_request,
+        dict,
+    )
+
+    assert exported_request[
+        "run_id"
+    ] == "run-001"
+
+
+def test_prepare_annotation_sources_accepts_matching_request_run_id() -> None:
+    """Older request records containing run_id remain supported."""
+
+    request = _request()
+
+    request[
+        "run_id"
+    ] = "run-001"
+
+    prepared = prepare_annotation_sources(
+        batch=_batch(
+            requests=[
+                request
+            ]
+        ),
+        source_artifact="raw.json",
+        source_artifact_sha256="e" * 64,
+    )
+
+    exported_request = prepared[
+        0
+    ].payload[
+        "request"
+    ]
+
+    assert isinstance(
+        exported_request,
+        dict,
+    )
+
+    assert exported_request[
+        "run_id"
+    ] == "run-001"
+
+
 def test_prepare_annotation_sources_preserves_false_claim_eligibility() -> None:
     """Discovery ineligibility must survive source preparation."""
 
@@ -340,7 +452,7 @@ def test_prepare_annotation_sources_preserves_false_claim_eligibility() -> None:
             benchmark_claim_eligible=False
         ),
         source_artifact="raw.json",
-        source_artifact_sha256="d" * 64,
+        source_artifact_sha256="f" * 64,
     )
 
     assert prepared[
@@ -358,7 +470,7 @@ def test_prepare_annotation_sources_preserves_true_claim_eligibility() -> None:
             benchmark_claim_eligible=True
         ),
         source_artifact="raw.json",
-        source_artifact_sha256="d" * 64,
+        source_artifact_sha256="1" * 64,
     )
 
     assert prepared[
@@ -368,8 +480,70 @@ def test_prepare_annotation_sources_preserves_true_claim_eligibility() -> None:
     ] is True
 
 
+def test_prepare_annotation_sources_rejects_batch_plan_run_id_mismatch() -> None:
+    """Batch and evaluation plan must identify the same run."""
+
+    with pytest.raises(
+        ValueError,
+        match="Batch/plan run_id mismatch",
+    ):
+        prepare_annotation_sources(
+            batch=_batch(
+                plan_run_id="run-other"
+            ),
+            source_artifact="raw.json",
+            source_artifact_sha256="2" * 64,
+        )
+
+
+def test_prepare_annotation_sources_rejects_batch_result_run_id_mismatch() -> None:
+    """Every result must belong to the batch run."""
+
+    batch = _batch(
+        results=[
+            _result(
+                run_id="run-other"
+            )
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Batch/result run_id mismatch",
+    ):
+        prepare_annotation_sources(
+            batch=batch,
+            source_artifact="raw.json",
+            source_artifact_sha256="3" * 64,
+        )
+
+
+def test_prepare_annotation_sources_rejects_request_run_id_mismatch() -> None:
+    """If a request contains run_id, it must agree with the batch."""
+
+    request = _request()
+
+    request[
+        "run_id"
+    ] = "run-other"
+
+    with pytest.raises(
+        ValueError,
+        match="Batch/request run_id mismatch",
+    ):
+        prepare_annotation_sources(
+            batch=_batch(
+                requests=[
+                    request
+                ]
+            ),
+            source_artifact="raw.json",
+            source_artifact_sha256="4" * 64,
+        )
+
+
 def test_prepare_annotation_sources_rejects_request_id_mismatch() -> None:
-    """Request/result identity mismatches must fail."""
+    """A result must exist for every planned request."""
 
     batch = _batch(
         results=[
@@ -386,7 +560,7 @@ def test_prepare_annotation_sources_rejects_request_id_mismatch() -> None:
         prepare_annotation_sources(
             batch=batch,
             source_artifact="raw.json",
-            source_artifact_sha256="e" * 64,
+            source_artifact_sha256="5" * 64,
         )
 
 
@@ -408,7 +582,7 @@ def test_prepare_annotation_sources_rejects_metadata_mismatch() -> None:
         prepare_annotation_sources(
             batch=batch,
             source_artifact="raw.json",
-            source_artifact_sha256="f" * 64,
+            source_artifact_sha256="6" * 64,
         )
 
 
@@ -430,12 +604,12 @@ def test_prepare_annotation_sources_rejects_non_success_result() -> None:
         prepare_annotation_sources(
             batch=batch,
             source_artifact="raw.json",
-            source_artifact_sha256="1" * 64,
+            source_artifact_sha256="7" * 64,
         )
 
 
 def test_prepare_annotation_sources_rejects_blank_response() -> None:
-    """Successful results still require actual response text."""
+    """Successful results still require response text."""
 
     batch = _batch(
         results=[
@@ -452,12 +626,12 @@ def test_prepare_annotation_sources_rejects_blank_response() -> None:
         prepare_annotation_sources(
             batch=batch,
             source_artifact="raw.json",
-            source_artifact_sha256="2" * 64,
+            source_artifact_sha256="8" * 64,
         )
 
 
 def test_prepare_annotation_sources_rejects_duplicate_results() -> None:
-    """Each request ID may appear at most once in results."""
+    """Each result request ID may occur at most once."""
 
     duplicate = _result()
 
@@ -471,9 +645,7 @@ def test_prepare_annotation_sources_rejects_duplicate_results() -> None:
         ],
         results=[
             duplicate,
-            dict(
-                duplicate
-            ),
+            dict(duplicate),
         ],
     )
 
@@ -484,7 +656,7 @@ def test_prepare_annotation_sources_rejects_duplicate_results() -> None:
         prepare_annotation_sources(
             batch=batch,
             source_artifact="raw.json",
-            source_artifact_sha256="3" * 64,
+            source_artifact_sha256="9" * 64,
         )
 
 
@@ -502,7 +674,25 @@ def test_prepare_annotation_sources_rejects_result_count_mismatch() -> None:
         prepare_annotation_sources(
             batch=batch,
             source_artifact="raw.json",
-            source_artifact_sha256="4" * 64,
+            source_artifact_sha256="a" * 64,
+        )
+
+
+def test_prepare_annotation_sources_rejects_plan_request_count_mismatch() -> None:
+    """Declared plan request count must match plan requests."""
+
+    batch = _batch(
+        plan_request_count=2
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="request_count",
+    ):
+        prepare_annotation_sources(
+            batch=batch,
+            source_artifact="raw.json",
+            source_artifact_sha256="b" * 64,
         )
 
 
@@ -529,7 +719,21 @@ def test_prepare_annotation_sources_rejects_plan_result_length_mismatch() -> Non
         prepare_annotation_sources(
             batch=batch,
             source_artifact="raw.json",
-            source_artifact_sha256="5" * 64,
+            source_artifact_sha256="c" * 64,
+        )
+
+
+def test_prepare_annotation_sources_rejects_blank_source_artifact() -> None:
+    """Source provenance label must not be blank."""
+
+    with pytest.raises(
+        ValueError,
+        match="source_artifact",
+    ):
+        prepare_annotation_sources(
+            batch=_batch(),
+            source_artifact=" ",
+            source_artifact_sha256="d" * 64,
         )
 
 
@@ -541,7 +745,7 @@ def test_write_annotation_sources_atomic_writes_json(
     prepared = prepare_annotation_sources(
         batch=_batch(),
         source_artifact="raw.json",
-        source_artifact_sha256="6" * 64,
+        source_artifact_sha256="e" * 64,
     )
 
     paths = write_annotation_sources_atomic(
@@ -549,13 +753,9 @@ def test_write_annotation_sources_atomic_writes_json(
         sources=prepared,
     )
 
-    assert len(
-        paths
-    ) == 1
+    assert len(paths) == 1
 
-    output_path = paths[
-        0
-    ]
+    output_path = paths[0]
 
     assert output_path.exists()
 
@@ -573,16 +773,29 @@ def test_write_annotation_sources_atomic_writes_json(
         "benchmark_claim_eligible"
     ] is False
 
+    request = loaded[
+        "request"
+    ]
+
+    assert isinstance(
+        request,
+        dict,
+    )
+
+    assert request[
+        "run_id"
+    ] == "run-001"
+
 
 def test_write_annotation_sources_atomic_refuses_silent_overwrite(
     tmp_path: Path,
 ) -> None:
-    """Existing annotation-source files require explicit overwrite."""
+    """Existing source files require explicit overwrite."""
 
     prepared = prepare_annotation_sources(
         batch=_batch(),
         source_artifact="raw.json",
-        source_artifact_sha256="7" * 64,
+        source_artifact_sha256="f" * 64,
     )
 
     write_annotation_sources_atomic(
@@ -603,12 +816,12 @@ def test_write_annotation_sources_atomic_refuses_silent_overwrite(
 def test_write_annotation_sources_atomic_allows_explicit_overwrite(
     tmp_path: Path,
 ) -> None:
-    """Explicit overwrite should permit deterministic regeneration."""
+    """Explicit overwrite permits deterministic regeneration."""
 
     prepared = prepare_annotation_sources(
         batch=_batch(),
         source_artifact="raw.json",
-        source_artifact_sha256="8" * 64,
+        source_artifact_sha256="1" * 64,
     )
 
     first_paths = (
@@ -627,10 +840,7 @@ def test_write_annotation_sources_atomic_allows_explicit_overwrite(
     )
 
     assert first_paths == second_paths
-
-    assert second_paths[
-        0
-    ].exists()
+    assert second_paths[0].exists()
 
 
 def test_write_annotation_sources_rejects_duplicate_output_paths(
@@ -638,7 +848,10 @@ def test_write_annotation_sources_rejects_duplicate_output_paths(
 ) -> None:
     """Two prepared records may not target the same file."""
 
-    payload: dict[str, object] = {
+    payload: dict[
+        str,
+        object,
+    ] = {
         "artifact_type": (
             ANNOTATION_SOURCE_ARTIFACT_TYPE
         )
@@ -690,24 +903,15 @@ def test_sha256_file_is_deterministic(
         encoding="utf-8",
     )
 
-    first = sha256_file(
-        path
-    )
-
-    second = sha256_file(
-        path
-    )
+    first = sha256_file(path)
+    second = sha256_file(path)
 
     assert first == second
-    assert len(
-        first
-    ) == 64
+    assert len(first) == 64
 
     path.write_text(
         "different\n",
         encoding="utf-8",
     )
 
-    assert sha256_file(
-        path
-    ) != first
+    assert sha256_file(path) != first
