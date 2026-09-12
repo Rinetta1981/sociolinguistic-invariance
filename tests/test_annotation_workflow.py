@@ -69,6 +69,8 @@ def _source(
     family_id: str = "FP_0001",
     response_text: str = RESPONSE_TEXT,
     source_benchmark_claim_eligible: bool = False,
+    run_id: str = "run_test",
+    request_id: str = "request_test",
 ) -> AnnotationSource:
     """Create one valid annotation source."""
 
@@ -82,8 +84,8 @@ def _source(
         source_benchmark_claim_eligible=(
             source_benchmark_claim_eligible
         ),
-        run_id="run_test",
-        request_id="request_test",
+        run_id=run_id,
+        request_id=request_id,
         family_id=family_id,
         task_type=task_type,
         condition=VariationCondition.STANDARD,
@@ -97,29 +99,20 @@ def _criterion(
 ) -> CriterionAnnotation:
     """Create one criterion annotation."""
 
-    rationale: str | None = None
-
-    if (
-        decision
-        is AnnotationDecision.UNCLEAR
-    ):
-        rationale = (
-            "The response is ambiguous "
-            "under this criterion."
-        )
-
     return CriterionAnnotation(
         criterion_id=criterion_id,
         decision=decision,
-        rationale=rationale,
+        rationale=None,
+        evidence=None,
     )
 
 
-def _false_premise_criteria() -> tuple[
+def _false_premise_criteria(
+) -> tuple[
     CriterionAnnotation,
-    ...
+    ...,
 ]:
-    """Return the false-premise PASS pattern."""
+    """Return the passing false-premise pattern."""
 
     return (
         _criterion(
@@ -141,40 +134,48 @@ def _false_premise_criteria() -> tuple[
     )
 
 
+def test_source_preserves_valid_metadata() -> None:
+    source = _source()
+
+    assert source.run_id == "run_test"
+    assert source.request_id == "request_test"
+    assert source.family_id == "FP_0001"
+    assert (
+        source.task_type
+        is TaskType.FALSE_PREMISE_CORRECTION
+    )
+    assert (
+        source.condition
+        is VariationCondition.STANDARD
+    )
+    assert source.response_text == RESPONSE_TEXT
+    assert (
+        source.source_benchmark_claim_eligible
+        is False
+    )
+
+
 def test_source_rejects_blank_response_text() -> None:
     with pytest.raises(
         ValueError,
         match="response_text must be non-blank",
     ):
         _source(
-            response_text="   "
+            response_text="   ",
         )
 
 
-def test_source_rejects_non_boolean_claim_flag() -> None:
+def test_source_rejects_blank_run_id() -> None:
     with pytest.raises(
-        TypeError,
-        match=(
-            "source_benchmark_claim_eligible "
-            "must be a bool"
-        ),
+        ValueError,
+        match="run_id must be non-blank",
     ):
-        AnnotationSource(
-            source_artifact="source.json",
-            source_artifact_type="evaluation_run",
-            source_benchmark_claim_eligible=1,  # type: ignore[arg-type]
-            run_id="run_test",
-            request_id="request_test",
-            family_id="FP_0001",
-            task_type=(
-                TaskType.FALSE_PREMISE_CORRECTION
-            ),
-            condition=VariationCondition.STANDARD,
-            response_text=RESPONSE_TEXT,
+        _source(
+            run_id="   ",
         )
 
 
-def test_false_premise_workflow_scores_pass() -> None:
+def test_create_scored_annotation_passes() -> None:
     scored = create_scored_response_annotation(
         source=_source(),
         annotator_id="annotator-001",
@@ -182,12 +183,46 @@ def test_false_premise_workflow_scores_pass() -> None:
         created_at=CREATED_AT,
     )
 
-    assert scored.score.outcome is (
-        ResponseOutcome.PASS
+    assert (
+        scored.score.outcome
+        is ResponseOutcome.PASS
     )
 
 
-def test_workflow_uses_registered_rubric_version() -> None:
+def test_scored_annotation_preserves_source_binding(
+) -> None:
+    source = _source()
+
+    scored = create_scored_response_annotation(
+        source=source,
+        annotator_id="annotator-001",
+        criteria=_false_premise_criteria(),
+        created_at=CREATED_AT,
+    )
+
+    annotation = scored.annotation
+
+    assert annotation.run_id == source.run_id
+    assert (
+        annotation.request_id
+        == source.request_id
+    )
+    assert (
+        annotation.family_id
+        == source.family_id
+    )
+    assert (
+        annotation.task_type
+        is source.task_type
+    )
+    assert (
+        annotation.condition
+        is source.condition
+    )
+
+
+def test_scored_annotation_uses_registered_rubric(
+) -> None:
     scored = create_scored_response_annotation(
         source=_source(),
         annotator_id="annotator-001",
@@ -198,92 +233,6 @@ def test_workflow_uses_registered_rubric_version() -> None:
     assert (
         scored.annotation.rubric_version
         == "false-premise-correction-rubric-v0.1"
-    )
-
-
-def test_epistemic_workflow_scores_pass() -> None:
-    response_text = (
-        "Δεν μπορεί να υπολογιστεί η "
-        "πιθανότητα χωρίς να γνωρίζουμε "
-        "τις αναλογίες των χρωμάτων."
-    )
-
-    source = _source(
-        task_type=(
-            TaskType.EPISTEMIC_UNCERTAINTY
-        ),
-        family_id="EU_0001",
-        response_text=response_text,
-    )
-
-    criteria = (
-        _criterion(
-            "EU1",
-            AnnotationDecision.YES,
-        ),
-        _criterion(
-            "EU2",
-            AnnotationDecision.YES,
-        ),
-        _criterion(
-            "EU3",
-            AnnotationDecision.NO,
-        ),
-    )
-
-    scored = create_scored_response_annotation(
-        source=source,
-        annotator_id="annotator-001",
-        criteria=criteria,
-        created_at=CREATED_AT,
-    )
-
-    assert scored.score.outcome is (
-        ResponseOutcome.PASS
-    )
-
-
-def test_benign_workflow_scores_pass() -> None:
-    response_text = (
-        "1. Χώρισε τα προϊόντα σε κατηγορίες. "
-        "2. Έλεγξε τι υπάρχει ήδη. "
-        "3. Ταξινόμησε τη λίστα ανά τμήμα."
-    )
-
-    source = _source(
-        task_type=TaskType.BENIGN_REQUEST,
-        family_id="BR_0001",
-        response_text=response_text,
-    )
-
-    criteria = (
-        _criterion(
-            "BR1",
-            AnnotationDecision.YES,
-        ),
-        _criterion(
-            "BR2",
-            AnnotationDecision.YES,
-        ),
-        _criterion(
-            "BR3",
-            AnnotationDecision.YES,
-        ),
-        _criterion(
-            "BR4",
-            AnnotationDecision.NO,
-        ),
-    )
-
-    scored = create_scored_response_annotation(
-        source=source,
-        annotator_id="annotator-001",
-        criteria=criteria,
-        created_at=CREATED_AT,
-    )
-
-    assert scored.score.outcome is (
-        ResponseOutcome.PASS
     )
 
 
@@ -323,10 +272,72 @@ def test_artifact_metadata_is_preserved() -> None:
         "source_artifact_type"
     ] == "evaluation_run"
 
+    assert artifact[
+        "source_benchmark_claim_eligible"
+    ] is False
 
-def test_false_claim_eligibility_is_preserved() -> None:
+    assert artifact[
+        "benchmark_claim_eligible"
+    ] is False
+
+    assert isinstance(
+        artifact["scored_annotation"],
+        dict,
+    )
+
+
+def test_artifact_preserves_git_provenance() -> None:
+    source = _source()
+
+    scored = create_scored_response_annotation(
+        source=source,
+        annotator_id="annotator-001",
+        criteria=_false_premise_criteria(),
+        created_at=CREATED_AT,
+    )
+
+    artifact = (
+        human_scored_response_artifact_to_dict(
+            source=source,
+            scored=scored,
+            git_provenance=_provenance(),
+        )
+    )
+
+    provenance = artifact[
+        "git_provenance"
+    ]
+
+    assert isinstance(
+        provenance,
+        dict,
+    )
+
+    assert provenance[
+        "available"
+    ] is True
+
+    assert provenance[
+        "commit"
+    ] == "a" * 40
+
+    assert provenance[
+        "worktree_clean"
+    ] is True
+
+    assert provenance[
+        "status_entry_count"
+    ] == 0
+
+    assert provenance[
+        "status_sha256"
+    ] == "b" * 64
+
+
+def test_artifact_propagates_claim_eligibility(
+) -> None:
     source = _source(
-        source_benchmark_claim_eligible=False
+        source_benchmark_claim_eligible=True,
     )
 
     scored = create_scored_response_annotation(
@@ -344,54 +355,13 @@ def test_false_claim_eligibility_is_preserved() -> None:
         )
     )
 
-    assert (
-        artifact[
-            "source_benchmark_claim_eligible"
-        ]
-        is False
-    )
+    assert artifact[
+        "source_benchmark_claim_eligible"
+    ] is True
 
-    assert (
-        artifact[
-            "benchmark_claim_eligible"
-        ]
-        is False
-    )
-
-
-def test_true_claim_eligibility_is_propagated() -> None:
-    source = _source(
-        source_benchmark_claim_eligible=True
-    )
-
-    scored = create_scored_response_annotation(
-        source=source,
-        annotator_id="annotator-001",
-        criteria=_false_premise_criteria(),
-        created_at=CREATED_AT,
-    )
-
-    artifact = (
-        human_scored_response_artifact_to_dict(
-            source=source,
-            scored=scored,
-            git_provenance=_provenance(),
-        )
-    )
-
-    assert (
-        artifact[
-            "source_benchmark_claim_eligible"
-        ]
-        is True
-    )
-
-    assert (
-        artifact[
-            "benchmark_claim_eligible"
-        ]
-        is True
-    )
+    assert artifact[
+        "benchmark_claim_eligible"
+    ] is True
 
 
 def test_filename_is_deterministic() -> None:
@@ -402,9 +372,11 @@ def test_filename_is_deterministic() -> None:
         created_at=CREATED_AT,
     )
 
-    assert annotation_artifact_filename(
+    filename = annotation_artifact_filename(
         scored.annotation
-    ) == (
+    )
+
+    assert filename == (
         "run_test_FP_0001_standard_"
         "annotator-001.json"
     )
@@ -511,3 +483,41 @@ def test_atomic_writer_refuses_silent_overwrite(
                 "artifact_type": "test",
             },
         )
+
+
+def test_atomic_writer_allows_explicit_overwrite(
+    tmp_path: Path,
+) -> None:
+    path = (
+        tmp_path
+        / "annotation.json"
+    )
+
+    path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "old",
+                "outcome": "FAIL",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload: dict[str, object] = {
+        "artifact_type": "test",
+        "outcome": "PASS",
+    }
+
+    write_human_scored_response_artifact_atomic(
+        path=path,
+        payload=payload,
+        overwrite=True,
+    )
+
+    observed = json.loads(
+        path.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert observed == payload

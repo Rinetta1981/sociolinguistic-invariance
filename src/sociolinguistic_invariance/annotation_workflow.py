@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -37,14 +38,33 @@ HUMAN_SCORED_RESPONSE_ARTIFACT_FORMAT_VERSION: Final = (
     "human-scored-response-annotation-v0.1"
 )
 
-_FILENAME_COMPONENT_PATTERN: Final = re.compile(
+_SAFE_COMPONENT_PATTERN: Final = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
 )
 
 
-@dataclass(frozen=True, slots=True)
+def _require_non_blank_string(
+    value: str,
+    *,
+    field_name: str,
+) -> None:
+    """Require one non-blank string."""
+
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+    ):
+        raise ValueError(
+            f"{field_name} must be non-blank."
+        )
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class AnnotationSource:
-    """Exact model response and metadata to be annotated."""
+    """Immutable source metadata for one response annotation."""
 
     source_artifact: str
     source_artifact_type: str
@@ -57,9 +77,9 @@ class AnnotationSource:
     response_text: str
 
     def __post_init__(self) -> None:
-        """Validate source-response metadata."""
+        """Validate annotation source metadata."""
 
-        required_strings = (
+        for field_name, value in (
             (
                 "source_artifact",
                 self.source_artifact,
@@ -84,13 +104,11 @@ class AnnotationSource:
                 "response_text",
                 self.response_text,
             ),
-        )
-
-        for field_name, value in required_strings:
-            if not value.strip():
-                raise ValueError(
-                    f"{field_name} must be non-blank."
-                )
+        ):
+            _require_non_blank_string(
+                value,
+                field_name=field_name,
+            )
 
         if not isinstance(
             self.source_benchmark_claim_eligible,
@@ -102,17 +120,74 @@ class AnnotationSource:
             )
 
 
+def _validate_source_binding(
+    *,
+    source: AnnotationSource,
+    scored: ScoredResponseAnnotation,
+) -> None:
+    """Require scored annotation metadata to match its source."""
+
+    annotation = scored.annotation
+
+    if annotation.run_id != source.run_id:
+        raise ValueError(
+            "Annotation run_id does not match source."
+        )
+
+    if (
+        annotation.request_id
+        != source.request_id
+    ):
+        raise ValueError(
+            "Annotation request_id does not match source."
+        )
+
+    if annotation.family_id != source.family_id:
+        raise ValueError(
+            "Annotation family_id does not match source."
+        )
+
+    if annotation.task_type is not source.task_type:
+        raise ValueError(
+            "Annotation task_type does not match source."
+        )
+
+    if annotation.condition is not source.condition:
+        raise ValueError(
+            "Annotation condition does not match source."
+        )
+
+    expected_response_sha256 = (
+        sha256_response_text(
+            source.response_text
+        )
+    )
+
+    if (
+        annotation.response_sha256
+        != expected_response_sha256
+    ):
+        raise ValueError(
+            "Annotation response_sha256 does not "
+            "match source response text."
+        )
+
+
 def create_scored_response_annotation(
     *,
     source: AnnotationSource,
     annotator_id: str,
-    criteria: tuple[
-        CriterionAnnotation,
-        ...
+    criteria: Sequence[
+        CriterionAnnotation
     ],
     created_at: datetime,
 ) -> ScoredResponseAnnotation:
-    """Create, bind, validate, and score one annotation."""
+    """Create and deterministically score one human annotation."""
+
+    _require_non_blank_string(
+        annotator_id,
+        field_name="annotator_id",
+    )
 
     rubric = get_task_rubric(
         source.task_type
@@ -134,70 +209,22 @@ def create_scored_response_annotation(
         ),
         annotator_id=annotator_id,
         created_at=created_at,
-        criteria=criteria,
+        criteria=tuple(
+            criteria
+        ),
     )
 
-    return score_response_annotation(
+    scored = score_response_annotation(
         annotation=annotation,
         response_text=source.response_text,
     )
 
-
-def _validate_source_binding(
-    *,
-    source: AnnotationSource,
-    scored: ScoredResponseAnnotation,
-) -> None:
-    """Verify that a scored annotation belongs to its source."""
-
-    annotation = scored.annotation
-
-    expected_response_sha256 = (
-        sha256_response_text(
-            source.response_text
-        )
+    _validate_source_binding(
+        source=source,
+        scored=scored,
     )
 
-    comparisons = (
-        (
-            "run_id",
-            annotation.run_id,
-            source.run_id,
-        ),
-        (
-            "request_id",
-            annotation.request_id,
-            source.request_id,
-        ),
-        (
-            "family_id",
-            annotation.family_id,
-            source.family_id,
-        ),
-        (
-            "task_type",
-            annotation.task_type,
-            source.task_type,
-        ),
-        (
-            "condition",
-            annotation.condition,
-            source.condition,
-        ),
-        (
-            "response_sha256",
-            annotation.response_sha256,
-            expected_response_sha256,
-        ),
-    )
-
-    for field_name, observed, expected in comparisons:
-        if observed != expected:
-            raise ValueError(
-                "Scored annotation does not match "
-                "its source for "
-                f"{field_name}."
-            )
+    return scored
 
 
 def human_scored_response_artifact_to_dict(
@@ -206,7 +233,7 @@ def human_scored_response_artifact_to_dict(
     scored: ScoredResponseAnnotation,
     git_provenance: GitProvenance,
 ) -> dict[str, object]:
-    """Serialize one auditable human-scored response."""
+    """Serialize one auditable human-scored response artifact."""
 
     _validate_source_binding(
         source=source,
@@ -245,61 +272,66 @@ def human_scored_response_artifact_to_dict(
     }
 
 
-def _validate_filename_component(
+def _safe_filename_component(
+    value: str,
     *,
     field_name: str,
-    value: str,
-) -> None:
-    """Reject unsafe or ambiguous filename components."""
+) -> str:
+    """Require one safe deterministic filename component."""
+
+    _require_non_blank_string(
+        value,
+        field_name=field_name,
+    )
 
     if (
-        not _FILENAME_COMPONENT_PATTERN.fullmatch(
+        value in {
+            ".",
+            "..",
+        }
+        or _SAFE_COMPONENT_PATTERN.fullmatch(
             value
         )
-        or ".." in value
+        is None
     ):
         raise ValueError(
-            f"{field_name} contains characters "
-            "that are unsafe for an annotation "
+            f"{field_name} is unsafe for an annotation "
             "artifact filename."
         )
+
+    return value
 
 
 def annotation_artifact_filename(
     annotation: ResponseAnnotation,
 ) -> str:
-    """Return deterministic filename for one annotation."""
+    """Return the deterministic filename for one annotation."""
 
-    components = (
-        (
-            "run_id",
-            annotation.run_id,
-        ),
-        (
-            "family_id",
-            annotation.family_id,
-        ),
-        (
-            "condition",
-            annotation.condition.value,
-        ),
-        (
-            "annotator_id",
-            annotation.annotator_id,
-        ),
+    run_id = _safe_filename_component(
+        annotation.run_id,
+        field_name="run_id",
     )
 
-    for field_name, value in components:
-        _validate_filename_component(
-            field_name=field_name,
-            value=value,
-        )
+    family_id = _safe_filename_component(
+        annotation.family_id,
+        field_name="family_id",
+    )
+
+    condition = _safe_filename_component(
+        annotation.condition.value,
+        field_name="condition",
+    )
+
+    annotator_id = _safe_filename_component(
+        annotation.annotator_id,
+        field_name="annotator_id",
+    )
 
     return (
-        f"{annotation.run_id}_"
-        f"{annotation.family_id}_"
-        f"{annotation.condition.value}_"
-        f"{annotation.annotator_id}.json"
+        f"{run_id}_"
+        f"{family_id}_"
+        f"{condition}_"
+        f"{annotator_id}.json"
     )
 
 
@@ -335,4 +367,5 @@ def write_human_scored_response_artifact_atomic(
     write_raw_results_atomic(
         path=path,
         payload=payload,
+        overwrite=overwrite,
     )
