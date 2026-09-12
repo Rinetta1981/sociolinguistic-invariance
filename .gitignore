@@ -231,3 +231,9 @@ results/annotations/*.json
 
 # Generated single-response annotation sources
 results/annotation_sources/*.json
+
+# Generated pilot analyses
+results/analysis/*.json
+
+# Generated pilot reports
+results/reports/*.md
