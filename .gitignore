@@ -228,3 +228,6 @@ results/smoke/*.json
 
 # Generated response annotations
 results/annotations/*.json
+
+# Generated single-response annotation sources
+results/annotation_sources/*.json
