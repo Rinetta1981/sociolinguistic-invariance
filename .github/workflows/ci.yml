@@ -51,3 +51,54 @@ jobs:
       - name: Pytest
         run: |
           python -m pytest
+
+  deployment-smoke:
+    name: Streamlit deployment smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Upgrade packaging tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+
+      - name: Install deployment dependencies
+        run: |
+          python -m pip install -r requirements.txt
+
+      - name: Verify portable dashboard snapshot
+        run: |
+          python -c 'import app; dataset, source = app.load_data(); assert source == "committed portable discovery snapshot"; assert dataset.run_id == "run_5d3a9ef724bd471ca96c9efe76bfc7db"; assert len(dataset.families) == 3; assert sum(len(f.responses) for f in dataset.families) == 12; assert dataset.benchmark_claim_eligible is False; print("Portable dashboard snapshot verified.")'
+
+      - name: Start Streamlit and verify health
+        run: |
+          python -m streamlit run app.py \
+            --server.headless true \
+            --server.address 127.0.0.1 \
+            --server.port 8501 \
+            > streamlit.log 2>&1 &
+
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if python -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8501/_stcore/health", timeout=2).read()' >/dev/null 2>&1; then
+              echo "Streamlit deployment smoke test passed."
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          echo "Streamlit did not become healthy."
+          cat streamlit.log
+          exit 1
